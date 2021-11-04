@@ -1,0 +1,388 @@
+{% extends "base.html" %}
+
+{% block content %}
+{% set edit_scheduled_date = settings.customer_portal.subscription.edit_scheduled_date %}
+{% set skip_scheduled_order = settings.customer_portal.subscription.skip_scheduled_order %}
+{% set edit_order_frequency = settings.customer_portal.subscription.edit_order_frequency %}
+{% set change_quantity = settings.customer_portal.subscription.change_quantity %}
+{% set change_variant = settings.customer_portal.subscription.change_variant %}
+{% set change_product = settings.customer_portal.subscription.change_product %}
+{% set cancellation_minimum_order_count = settings.customer_portal.subscription.cancellation_minimum_order_count %}
+{% set cancellation_email_contact = settings.customer_portal.subscription.cancellation_email_contact %}
+{% set cancel_subscription = settings.customer_portal.subscription.cancel_subscription %}
+{% set reactivate_subscription = settings.customer_portal.subscription.reactivate_subscription %}
+{% set edit_shipping_address = settings.customer_portal.edit_shipping_address %}
+{% set address_type = 'shipping' %}
+
+<section class="rc_subscription">
+
+    <div class="rc_grid rc_flex-column">
+        {% set product = subscription.product %}
+        {% set variants = product.shopify_details.variants %}
+
+        <div class="rc_text-center rc_mb-10">
+            {% if product
+                and product.shopify_details
+                and product.shopify_details.images
+            %}
+                <img src="{{ product.shopify_details.images[0].src | img_url('200x200') }}">
+            {% else %}
+                <img src="//rechargestatic-bootstrapheroes.netdna-ssl.com/static/images/no-image.png" width="200">
+            {% endif %}
+        </div>
+        <div class="rc_text-center">
+            <h5>
+                {{ subscription.product_title }}
+                {% if subscription.variant_title %} - {{ subscription.variant_title }} {% endif %}
+            </h5>
+            <p>{{ subscription.price | money }}</p>
+        </div>
+    </div>
+
+    <br>
+
+    <div class="rc_grid">
+        <div class="rc_medium-up--66 rc_mr-30--medium-up">
+            <!-- Next charge date -->
+            <fieldset class="rc_card">
+                <h4>{{ 'cp_next_order_on' | t }}</h4>
+                <div class="rc_mb-20 rc_d-flex rc_justify-content-between rc_align-items-center">
+                    {% if subscription.next_charge_scheduled_at %}
+                        <p>{{ subscription.next_charge_scheduled_at | date('%m/%d/%Y') }}</p>
+                        {% if edit_scheduled_date %}
+                            <button
+                                class="rc_btn rc_btn--secondary"
+                                onclick="ReCharge.Helpers.toggle('#ReChargeForm_date')"
+                            >{{ 'cp_edit_order_date' | t }}</button>
+                        {% endif %}
+                    {% else %}
+                        {{ 'cp_no_date' | t }}
+                    {% endif %}
+                </div>
+                <form
+                    method="post"
+                    action="{{ subscription.id | subscription_set_next_charge_date_url }}"
+                    id="ReChargeForm_date"
+                    style="display: none;"
+                >
+                    <div class="rc_small--50 rc_medium-up--50 rc_mb-20">
+                        <label for="date">{{ 'delivery_schedule_label' | t }}:</label>
+                        <input
+                            type="date"
+                            name="date"
+                            id="date"
+                            data-next-charge-scheduled-at
+                            value="{{ subscription.next_charge_scheduled_at | date('%Y-%m-%d') }}"
+                        >
+                    </div>
+                    <div class="rc_mb-20">
+                        <button
+                            class="rc_btn rc_mb-10--xs"
+                            type="submit"
+                        >{{ 'cp_update_next_shipiment_date_button' | t }}</button>
+                        <button
+                            class="rc_btn rc_btn--secondary"
+                            type="button"
+                            onclick="ReCharge.Helpers.toggle('#ReChargeForm_date')"
+                        >{{ 'cp_cancel_cancel_button' | t }}</button>
+                    </div>
+                </form>
+            </fieldset>
+
+            <!-- Delivery schedule -->
+            {% if product.subscription_defaults %}
+                {% if edit_order_frequency != 'Prohibited' %}
+                    <fieldset class="rc_card">
+                        <h4>{{ 'delivery_schedule_label' | t }}</h4>
+                        <div class="rc_mb-20 rc_d-flex rc_justify-content-between rc_align-items-center">
+                            <p>
+                              	{{ 'cp_every' | t }} {{ subscription.order_interval_frequency }}
+                                {% if subscription.order_interval_frequency | int > 1 %}
+                                	{{ subscription.order_interval_unit | append('s') }}
+                                {% else %}
+                                	{{ subscription.order_interval_unit }}
+                                {% endif %}
+                          	</p>
+                            <button
+                                class="rc_btn rc_btn--secondary"
+                                onclick="ReCharge.Helpers.toggle('#ReChargeForm_schedule')"
+                            >{{ 'cp_edit_frequency' | t }}</button>
+                        </div>
+                        <form
+                            method="post"
+                            action="{{ subscription.id | subscription_url }}"
+                            id="ReChargeForm_schedule"
+                            style="display: none;"
+                        >
+                            {% if edit_order_frequency == 'Any' %}
+                                <div class="rc_small--50 rc_medium-up--50 rc_mb-20">
+                                    <select
+                                        class="rc_mb-10"
+                                        name="order_interval_frequency"
+                                        id="order_interval_frequency"
+                                        onchange="document.querySelector('[name=charge_interval_frequency]').value=this.value"
+                                    >
+                                        {% for i in range(1, 90) %}
+                                            <option
+                                                value="{{ i }}"
+                                                {% if i == subscription.order_interval_frequency | int %}selected{% endif %}
+                                            >{{ i }}</option>
+                                        {% endfor %}
+                                    </select>
+                                    <select name="order_interval_unit" id="order_interval_unit">
+                                        <option value="day" {% if 'day' == subscription.order_interval_unit %}selected{% endif %}>{{ 'Days' | t }}</option>
+                                        <option value="week" {% if 'week' == subscription.order_interval_unit %}selected{% endif %}>{{ 'Weeks' | t }}</option>
+                                        <option value="month" {% if 'month' == subscription.order_interval_unit %}selected{% endif %}>{{ 'Months' | t }}</option>
+                                    </select>
+                                </div>
+                            {% elif edit_order_frequency == 'Limited' %}
+                                <div class="rc_small--50 rc_medium-up--50 rc_mb-20">
+                                    <select
+                                        name="order_interval_frequency"
+                                        id="order_interval_frequency"
+                                        onchange="document.querySelector('[name=charge_interval_frequency]').value=this.value"
+                                    >
+                                        {% for frequency in product.subscription_defaults.order_interval_frequency_options %}
+                                        	<option
+                                                value="{{ frequency }}"
+                                                {% if frequency | int == subscription.order_interval_frequency | int %}selected{% endif %}
+                                            >
+                                                {{ frequency }} {{ product.subscription_defaults.order_interval_unit }}
+                                        </option>
+                                        {% endfor %}
+                                    </select>
+                                </div>
+                                <input
+                                    type="hidden"
+                                    name="order_interval_unit"
+                                    value="{{ product.subscription_defaults.order_interval_unit | downcase | remove('s') }}"
+                                >
+                            {% endif %}
+                            <input
+                                type="hidden"
+                                name="charge_interval_frequency"
+                                value="{{ subscription.charge_interval_frequency }}"
+                            >
+                            <div>
+                                <button type="submit" class="rc_btn rc_mb-10--xs">{{ 'cp_update_frequency' | t }}</button>
+                                <button
+                                    class="rc_btn rc_btn--secondary"
+                                    type="button"
+                                    onclick="ReCharge.Helpers.toggle('#ReChargeForm_schedule')"
+                                >{{ 'cp_cancel_cancel_button' | t }}</button>
+                            </div>
+                        </form>
+                    </fieldset>
+                {% else %}
+                    <fieldset class="rc_card">
+                        <h4>{{ 'delivery_schedule_label' | t }}</h4>
+                        <p>
+                            {{ 'cp_every' | t }} {{ subscription.order_interval_frequency }}
+                            {% if subscription.order_interval_frequency | int > 1 %}
+                            	{{ subscription.order_interval_unit | append('s') }}
+                            {% else %}
+                            	{{ subscription.order_interval_unit }}
+                            {% endif %}
+                        </p>
+                    </fieldset>
+                {% endif %}
+            {% endif %}
+
+            <!-- Quantity -->
+            <fieldset class="rc_card">
+                <h4>{{ 'Quantity' }}</h4>
+                <div class="rc_mb-20 rc_d-flex rc_justify-content-between rc_align-items-center">
+                    <p>{{ subscription.quantity }}</p>
+                    {% if change_quantity %}
+                        <button
+                            class="rc_btn rc_btn--secondary"
+                            onclick="ReCharge.Helpers.toggle('#ReChargeForm_quantity')"
+                        >{{ 'cp_edit_quantity' | t }}</button>
+                    {% endif %}
+                </div>
+                <form
+                    method="post"
+                    action="{{ subscription.id | subscription_url }}"
+                    id="ReChargeForm_quantity"
+                    style="display: none;"
+                >
+                    <div class="rc_small--50 rc_medium-up--50 rc_mb-20">
+                        <label for="quantity">{{ 'Quantity' }}:</label>
+                        <input type="number" name="quantity" id="quantity" min="1" value="{{ subscription.quantity }}">
+                    </div>
+                    <div class="rc_mb-20">
+                        <button
+                            class="rc_btn rc_mb-10--xs"
+                            type="submit"
+                        >{{ 'cp_update_quantity' | t }}</button>
+                        <button
+                            class="rc_btn rc_btn--secondary"
+                            type="button"
+                            onclick="ReCharge.Helpers.toggle('#ReChargeForm_quantity')"
+                        >{{ 'cp_cancel_cancel_button' | t }}</button>
+                    </div>
+                </form>
+            </fieldset>
+
+            <!-- Variant -->
+            {% if product and "shopify_details" in product and "variants" in product.shopify_details %}
+                <fieldset
+                    class="rc_card"
+                    style="{% if not change_variant and not subscription.variant_title or variants | length == 1 and variants[0].title == 'Default Title' %} display: none; {% endif %}"
+                >
+                    <h4>{{ 'Variant' | t }}</h4>
+                    <div class="rc_mb-20 rc_d-flex rc_justify-content-between rc_align-items-center">
+                        <p>{{ subscription.variant_title }}</p>
+                        {% if variants | length > 1 and change_variant %}
+                            <button
+                                class="rc_btn rc_btn--secondary"
+                                data-rc-toggle-variant-form
+                                onclick="ReCharge.Helpers.toggle('#ReChargeForm_variant')"
+                                style="display: none"
+                            >{{ 'cp_edit_variant' | t }}</button>
+                        {% endif %}
+                    </div>
+                    <form
+                        method="post"
+                        action="{{ subscription.id | subscription_url }}"
+                        id="ReChargeForm_variant"
+                        style="display: none;"
+                    >
+                        <div class="rc_mb-20 rc_small--50 rc_medium-up--50">
+                            <select name="shopify_variant_id" id="shopify_variant_id" data-rc-shopify_variant_id>
+                              {% for variant in variants %}
+                                  <option value="{{ variant.shopify_id }}"
+                                          {% if variant.shopify_id == subscription.shopify_variant_id %}selected{% endif %}>
+                                    {{ variant.title }}
+                                  </option>
+                              {% endfor %}
+                            </select>
+                        </div>
+                        <div class="rc_mb-20">
+                            <button
+                                class="rc_btn rc_mb-10--xs"
+                                type="submit"
+                            >{{ 'cp_update_variant' | t }}</button>
+                            <button
+                                class="rc_btn rc_btn--secondary"
+                                type="button"
+                                onclick="ReCharge.Helpers.toggle('#ReChargeForm_variant')"
+                            >{{ 'cp_cancel_cancel_button' | t }}</button>
+                        </div>
+                    </form>
+                </fieldset>
+            {% endif %}
+
+            <!-- Actions -->
+            <fieldset class="rc_card">
+                {% if subscription.status == 'ACTIVE' %}
+                    {% if subscription.next_charge_scheduled_at %}
+                        {% if subscription.order_interval_frequency == subscription.charge_interval_frequency %}
+                            {% if skip_scheduled_order %}
+                                <button
+                                    class="rc_link"
+                                    onclick="ReCharge.JQuery.Modal.confirmAction('subscription-skip', {{ subscription.id }})"
+                                >{{ 'cp_skip_shipment' | t }}</button><br>Hello World
+                            {% endif %}
+                        {% endif %}
+                    {% else %}
+              			<p>{{ 'cp_no_date' | t }}</p>
+                    {% endif %}
+                    {% if subscription.is_swappable and change_product %}
+                        <a
+                            class="rc_link"
+                            href="{{ subscription.id | subscription_swap_search_url }}"
+                        >{{ 'button_swap_product' | t }}</a><br>
+                    {% endif %}
+                        <a
+                            class="rc_link js-cancel-sub-btn"
+                            href="{{ subscription.id | subscription_cancel_url }}"
+                            style="pointer-events: none;"
+                        >{{ 'cp_cancel_cancel_button' | t }}</a><br>
+                {% else %}
+                    {% if reactivate_subscription %}
+                        <button
+                            class="rc_link"
+                            onclick="ReCharge.JQuery.Modal.confirmAction('subscription-reactivate', {{ subscription.id }})"
+                        >{{ 'cp_reactivate_subscription' | t }}</button>
+                    {% endif %}
+                {% endif %}
+            </fieldset>
+        </div>
+
+        <div class="rc_medium-up--33">
+            <!-- Shipping address -->
+            <fieldset class="rc_card">
+                <h4>{{ 'ships_to' | t }}</h4>
+                {% set address = subscription.address %}
+                {% include '_shipping_billing_address_card.html' %}
+            </fieldset>
+            <!-- Payment source -->
+            {% set payment_source = payment_sources[0] %}
+            {% include '_card_on_file_card.html' %}
+        </div>
+    </div>
+
+</section>
+
+<script>
+    (() => {
+      	ReCharge.Base.subscription = {{ subscription | json }};
+     	ReCharge.Base.payment_sources = {{ payment_sources | json }};
+        ReCharge.Base.settings = {{ settings | json }};
+        // will update cancel subscription button depening on store settings
+        ReCharge.Utils.checkIfStoreAllowsCancellation();
+
+        function updateNextChargeInput() {
+            const dateInput = document.querySelector('[data-next-charge-scheduled-at]');
+            dateInput.min = new Date().toISOString().slice(0,10);
+        }
+
+        {% if change_variant %}
+            function shouldShowVariantFormToggleBtn() {
+                const availableVariants = filterAvailableVariants(ReCharge.Base.subscription.product);
+                if (
+                    ReCharge.Base.settings.customer_portal.subscription.change_variant &&
+                    ReCharge.Base.subscription.product.shopify_details.variants.length > 1 &&
+                    availableVariants.length
+                ) {
+                    ReCharge.Helpers.toggle('[data-rc-toggle-variant-form]');
+                    renderAvailableVariants();
+                }
+            }
+
+            function filterAvailableVariants(product) {
+                return product.shopify_details.variants.filter(variant => ReCharge.Utils.checkInventory(variant));
+            }
+
+            function renderAvailableVariants() {
+                const selectEl = document.querySelector('[data-rc-shopify_variant_id]');
+                let availableVariants= filterAvailableVariants(ReCharge.Base.subscription.product);
+
+                if (selectEl) {
+                    selectEl.innerHTML = availableVariants
+                        .map(variant => `<option value="${variant.shopify_id}">${variant.title}</option>`)
+                        .join('');
+
+                    const shopifyId = availableVariants.length
+                        ? availableVariants[0].shopify_id
+                        : ReCharge.Base.subscription.product.shopify_details.variants[0].shopify_id;
+
+                    // Update hidden variant id
+                    selectEl.value = shopifyId;
+                }
+            }
+        {% endif %}
+
+        function initSubscriptionPage() {
+            updateNextChargeInput();
+            {% if change_variant %}
+                shouldShowVariantFormToggleBtn();
+            {% endif %}
+        }
+
+        document.addEventListener('DOMContentLoaded', initSubscriptionPage);
+    })();
+</script>
+
+{% endblock %}
